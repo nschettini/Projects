@@ -1,0 +1,742 @@
+
+
+CUNY MSDS DATA 607 - Final Project - NYC Vision Zero
+Nicholas Schettini
+May 2, 2018
+
+Introduction
+
+Data
+Data from NYPD Database for 2017
+Data from NYPD Database for 2013
+Comparsion of Data
+Twitter Analysis
+Sentiment Analysis of Twitter data
+Conclusions
+Shiny
+References
+
+library(tidyverse)
+library(dplyr)
+library(ggmap)
+library(ggiraph)
+http://rpubs.com/nschettini/386146
+
+library(gridExtra)
+library(tm)
+library(twitteR)
+library(wordcloud)
+library(RColorBrewer)
+library(syuzhet)
+library(kableExtra)
+library(cowplot)
+library(knitr)
+library(shiny)
+library(shinythemes)
+library(leaflet)
+
+Introduction
+NYC has a new initiative called Vision Zero. Its mission is to make New York City the world’s safest big city. One of the leading causes of injury-related death in New York City is being struck by a vehicle. Traffic related fatalities have decreased from 1990 - to 2011, from 701 to 249, respectively.
+
+One of Vision Zero’s initiates is the decrease in speed limits. Unless otherwise posted, the speed limit is 25MPH. The speed limit change was introduced in2014. In this data analysis, I will look at data from 2013 and 2017, to determine if project Vision Zero has had any type of impact on society.
+
+Data
+The data is collected from NYC Open Data, more specificity the NYC NYPD Database, which can be found here: https://data.cityofnewyork.us/Public-Safety/NYPD-Motor-Vehicle-Collisions/h9gi-nx95.
+
+The cases within the study represent the various accidents reported, in this case from years 2013 and 2017. There are 8295 cases found in the 2013 dataset and 6214 cases found within the 2017 dataset.
+
+Data is also pulled from Twitters API. This data was used to create sentiment analysis of tweets relating to the topic
+
+Data from NYPD Database for 2017
+library(readr)
+NYPD_Motor_Vehicle_Collisions_2017 <- read_csv("https://raw.githubusercontent.com/nschettini/CUNY-MSDS-DATA-607/master/NYPD_Motor_Vehicle_Collisions%202017.csv")
+
+sidata <- NYPD_Motor_Vehicle_Collisions_2017
+Being a native Staten Islander, I often seen many car accidents going to and from work. According to the data in 2017 the top contributing factors for why one would be involved in a motor vehicle accident are: driver inattention/distraction, unspecified, failure to yield right-of-way, and following too closely.
+
+sidata_factor <- sidata %>%
+  group_by(sidata$`CONTRIBUTING FACTOR VEHICLE 1`) %>%
+  filter(n()>50)
+
+my_gg <- ggplot(sidata_factor, aes(sidata_factor$`CONTRIBUTING FACTOR VEHICLE 1`)) + 
+  geom_bar_interactive(aes(tooltip = sidata_factor$`VEHICLE TYPE CODE 1`,
+                           fill = sidata_factor$`VEHICLE TYPE CODE 1`)) +
+  coord_flip() +
+  theme(legend.position = "none") +
+  xlab("Contributing Factor")
+
+ggiraph(code = print(my_gg))
+Alcohol Involvement
+Backing Unsafely
+Driver Inattention/Distraction
+Driver Inexperience
+Failure to Yield Right-of-Way
+Following Too Closely
+Other Vehicular
+Passing or Lane Usage Improper
+Pavement Slippery
+Reaction to Other Uninvolved Vehicle
+Traffic Control Disregarded
+Turning Improperly
+Unsafe Lane Changing
+Unsafe Speed
+Unspecified
+View Obstructed/Limited
+0
+500
+1000
+1500
+count
+Contributing Factor
+These findings, to say the least, are not surprising at all. Staten Island is small. Most roads consist of single lanes, and there is no shortage of new houses being built. There are more and more people moving to Staten Island, which causes more traffic. While driving, the use of cell phones is rampant. You can almost always turn your head and see someone trying to text while they’re driving. With the increased traffic, people are often in a rush to go from red light to red light and are often tailgateing. (Many accidents I’ve personally seen involved a car rear-ended into another.).
+
+Although fairly common sense - the top types of vehicles involved in an accident on Staten Island:
+
+sidata_vehicletypecode <- sidata %>%
+  group_by(sidata$`VEHICLE TYPE CODE 1`) %>%
+  filter(n()>10)
+
+gg_si_vehicletype <- ggplot(sidata_vehicletypecode, aes(sidata_vehicletypecode$`VEHICLE TYPE CODE 1`)) +
+  geom_bar_interactive(aes(fill = sidata_vehicletypecode$`VEHICLE TYPE CODE 1`,
+                           tooltip = sidata_vehicletypecode$`VEHICLE TYPE CODE 1`)) +
+  theme(legend.position = "none") +
+  theme(axis.text.x=element_text(angle=45, hjust=1)) +
+  xlab("Vehicle Type") +
+  ggtitle("Count of Vehicle Types involved in Accidents")
+
+ggiraph(code = print(gg_si_vehicletype))
+0
+1000
+2000
+3000
+4000
+BICYCLE
+BU
+MOTORCYCLE
+PASSENGER VEHICLE
+PICK-UP TRUCK
+SPORT UTILITY / STATION WAGON
+TAXI
+NA
+Vehicle Type
+count
+Count of Vehicle Types involved in Accidents
+Passenger vehicles, followed by SUVs.
+
+Staten Island is broken up into different neighborhoods, each with their own type of roads. Some being more hectic than others. Below graph shows the number of accidents on different Staten Island streets for 2017. It’s filtered to show streets that have had more than 50 accidents.
+
+sidata_streetname <- sidata %>%
+  group_by(sidata$`ON STREET NAME`) %>%
+  filter(n()>50)
+
+gg_si_streetname <- ggplot(sidata_streetname, aes(sidata_streetname$`ON STREET NAME`)) + 
+  geom_bar_interactive(aes(fill = sidata_streetname$`VEHICLE TYPE CODE 1`,
+                           tooltip = sidata_streetname$`VEHICLE TYPE CODE 1`)) +
+  theme(legend.position = "none") +
+  theme(axis.text.x=element_text(angle=40, hjust=1)) +
+  xlab("Street Name") +
+  ggtitle("Count of Vehicle Types vs. Street")
+
+ggiraph(code = print(gg_si_streetname))
+0
+500
+1000
+1500
+AMBOY ROAD
+ARTHUR KILL ROAD
+BAY STREET
+CAPODANNO BOULEVARD
+CASTLETON AVENUE
+CLOVE ROAD
+FOREST AVENUE
+HYLAN BOULEVARD
+RICHMOND AVENUE
+RICHMOND ROAD
+RICHMOND TERRACE
+TARGEE STREET
+VICTORY BOULEVARD
+NA
+Street Name
+count
+Count of Vehicle Types vs. Street
+Sadly, a great deal of locations weren’t recorded - listed as NA. But based on the location data that is present, Hylan Boulevard seems to be the most common place for an accident to occur. Which is no suprise for a local Staten Islander.
+
+However, there is location data within the dataset. Using ggmaps, I created a heatmap of all of the lat/long points - which should take into account even the NA’s.
+
+sidata_maps <- sidata %>%
+  select(LATITUDE, LONGITUDE, `ON STREET NAME`, `CONTRIBUTING FACTOR VEHICLE 1`)
+
+sidata_maps <- na.omit(sidata_maps)
+lat <- sidata_maps$LATITUDE
+long <- sidata_maps$LONGITUDE
+
+b <- get_map(location = "Staten Island, NY", maptype="roadmap", zoom = 12, source="google", crop = FALSE)
+ggtest <- ggmap(b) +
+geom_point_interactive(data = sidata_maps, aes(x=long, y = lat, 
+                                               tooltip = sidata_maps$`CONTRIBUTING FACTOR VEHICLE 1`,
+                                               color = "Red",
+                                               data_id = sidata_maps$`CONTRIBUTING FACTOR VEHICLE 1`), size = 1, alpha = 0.7)
+
+pointmap2017 <- ggiraph(code = {print(ggtest)}, zoom_max = 5,
+        tooltip_offx = 20, tooltip_offy = -10, 
+        hover_css = "cursor:pointer;fill:red;stroke:red;",
+        tooltip_opacity = 0.7)
+## Warning: Removed 2 rows containing missing values (geom_interactive_point).
+pointmap2017
+40.50
+40.55
+40.60
+40.65
+-74.25
+-74.20
+-74.15
+-74.10
+-74.05
+lon
+lat
+colour
+Red
+ heatmap2017 <- ggmap(b) +
+stat_density2d(data = sidata_maps, aes(x=long, y = lat, fill = ..level.., alpha = ..level..),
+                                  geom = "polygon", size = 0.01, bins = 85) +
+  scale_fill_gradient(low = "red", high = "green") +
+  scale_alpha(range = c(0, 0.3), guide = FALSE)
+
+
+heatmap2017
+## Warning: Removed 2 rows containing non-finite values (stat_density2d).
+
+It looks very similar to the bar chart above - most accidents happen within Hylan Blvd (the light green area is only part of Hylan Blvd.)
+
+Out of the data, 9 accidents resulted in death.
+
+sidata_all_death <- sidata %>%
+  filter(sidata$`NUMBER OF PERSONS KILLED` | sidata$`NUMBER OF PEDESTRIANS KILLED` |
+           sidata$`NUMBER OF CYCLIST KILLED` | sidata$`NUMBER OF MOTORIST KILLED`)
+
+count(sidata_all_death)
+## # A tibble: 1 x 1
+##       n
+##   <int>
+## 1     9
+As someone who just got into motorcycle riding, I’m interested to see how motorcycles specifically fair on Staten Island.
+
+The following graph shows where the most accidents happened relating to motorcycles.
+
+sidata_motorcycle <- sidata %>%
+  filter(sidata$`VEHICLE TYPE CODE 1` == "MOTORCYCLE" | sidata$`VEHICLE TYPE CODE 2` == "MOTORCYCLE")
+
+ggplot(sidata_motorcycle, aes(sidata_motorcycle$`ON STREET NAME`)) + geom_bar() +
+  coord_flip() +
+  xlab("Street Name") +
+  ggtitle("Count of Accidents vs. Street")
+
+count(sidata_motorcycle)
+## # A tibble: 1 x 1
+##       n
+##   <int>
+## 1    42
+According to the data, there were only 42 reported accidents that involved a motorcycle. Obviously there a less motorcyclists on the road than there are those driving regular automobiles. There are also probably unreported motorcycle accidents (motorcyclists that flee the scene, decide to not report since bikes are cheaper to fix, etc.). Either way, the most “dangerious” location (besides the NA void) is Bay Street, followed by amboy road.
+
+After looking at the locations where an accidently is likely to happen, I wanted to look at what’s the top reason why one would get into an accident in the first place.
+
+sidata_motorcycle <- sidata %>%
+  filter(sidata$`VEHICLE TYPE CODE 1` == "MOTORCYCLE" | sidata$`VEHICLE TYPE CODE 2` == "MOTORCYCLE")
+
+ggplot(sidata_motorcycle, aes(sidata_motorcycle$`CONTRIBUTING FACTOR VEHICLE 1`)) + geom_bar() +
+  coord_flip() +
+  xlab("Contributing Factor") +
+  ggtitle("Count of Contributing Factors")
+
+Failure to yield right-of-way, and driver distraction. When I took the MSF (motorcycle safety course), those were the top two reasons as to why a motorcycle would get into an accident. With no protection of a car, motorcyclists need to take much extra precaution when approaching an intersection - the automoible always goes first. Driver inattention/distraction - a motorcyclist always needs to look where they’re going. Basically, you go where you’re looking - if you’re not focused on the road, … you get the point.
+
+lat_moto <- sidata_motorcycle$LATITUDE
+long_moto <- sidata_motorcycle$LONGITUDE
+b_moto <- get_map(location = "Staten Island, NY", maptype="roadmap", zoom = 12, source="google", crop = FALSE)
+ggtest2 <- ggmap(b_moto) +
+geom_point_interactive(data = sidata_motorcycle, aes(x=long_moto, y = lat_moto, 
+                                                     tooltip = sidata_motorcycle$`CONTRIBUTING FACTOR VEHICLE 1`,
+                                                     data_id = sidata_motorcycle$`CONTRIBUTING FACTOR VEHICLE 1`),
+                       size = 2, color = "red", alpha = 0.7)
+
+ggiraph(code = {print(ggtest2)}, zoom_max = 5,
+        tooltip_offx = 20, tooltip_offy = -10, 
+        hover_css = "cursor:pointer;fill:red;stroke:red;",
+        tooltip_opacity = 0.7)
+## Warning: Removed 1 rows containing missing values (geom_interactive_point).
+40.50
+40.55
+40.60
+40.65
+-74.25
+-74.20
+-74.15
+-74.10
+-74.05
+lon
+lat
+ ggmap(b_moto) +
+stat_density2d(data = sidata_motorcycle, aes(x=long_moto, y = lat_moto, fill = ..level.., alpha = ..level..),
+                                  geom = "polygon", size = 0.01, bins = 20) +
+  scale_fill_gradient(low = "red", high = "green") +
+  scale_alpha(range = c(0, 0.3), guide = FALSE)
+## Warning: Removed 1 rows containing non-finite values (stat_density2d).
+
+How many of those 42 accidents resulted in a death?
+
+sidata_motorcycle_death <- sidata %>%
+  filter(sidata$`VEHICLE TYPE CODE 1` == "MOTORCYCLE" | sidata$`VEHICLE TYPE CODE 2` == "MOTORCYCLE")
+
+sidata_motorcycle_death <- sidata_motorcycle_death %>%
+  filter(sidata_motorcycle_death$`NUMBER OF PERSONS KILLED` | sidata_motorcycle_death$`NUMBER OF PEDESTRIANS KILLED` |
+           sidata_motorcycle_death$`NUMBER OF CYCLIST KILLED` | sidata_motorcycle_death$`NUMBER OF MOTORIST KILLED`)
+
+ 
+count(sidata_motorcycle_death)
+## # A tibble: 1 x 1
+##       n
+##   <int>
+## 1     2
+From the data, 2 accidents resulted in death.
+
+Data from NYPD Database for 2013
+Data from NYPD Database for 2013
+
+library(readr)
+NYPD_Motor_Vehicle_Collisions_2013 <- read_csv("https://raw.githubusercontent.com/nschettini/CUNY-MSDS-DATA-607/master/NYPD_Motor_Vehicle_Collisions2014.csv")
+
+sidata2013 <- NYPD_Motor_Vehicle_Collisions_2013
+sidata_factor2013 <- sidata2013 %>%
+  group_by(sidata2013$`CONTRIBUTING FACTOR VEHICLE 1`) %>%
+  filter(n()>50)
+
+my_gg2013 <- ggplot(sidata_factor2013, aes(sidata_factor2013$`CONTRIBUTING FACTOR VEHICLE 1`)) + 
+  geom_bar_interactive(aes(tooltip = sidata_factor2013$`VEHICLE TYPE CODE 1`,
+                           fill = sidata_factor2013$`VEHICLE TYPE CODE 1`)) +
+  coord_flip() +
+  theme(legend.position = "none") +
+  xlab("Contributing Factor") +
+  ggtitle("Count of Contributing Factors")
+
+ggiraph(code = print(my_gg2013))
+Alcohol Involvement
+Backing Unsafely
+Driver Inattention/Distraction
+Driver Inexperience
+Failure to Yield Right-of-Way
+Fatigued/Drowsy
+Lost Consciousness
+Other Vehicular
+Outside Car Distraction
+Pavement Slippery
+Physical Disability
+Prescription Medication
+Traffic Control Disregarded
+Turning Improperly
+Unspecified
+0
+2000
+4000
+count
+Contributing Factor
+Count of Contributing Factors
+The findings that are reported/classified show that driver inattention/distraction as the number one reason why one would be involved in an accident, followed by fatigued/drowsy, and failure to yield right-of way.
+
+Although fairly common sense - the top types of vehicles involved in an accident on Staten Island:
+
+sidata_vehicletypecode2013 <- sidata2013 %>%
+  group_by(sidata2013$`VEHICLE TYPE CODE 1`) %>%
+  filter(n()>10)
+
+gg_si_vehicletype2013 <- ggplot(sidata_vehicletypecode2013, aes(sidata_vehicletypecode2013$`VEHICLE TYPE CODE 1`)) +
+  geom_bar_interactive(aes(fill = sidata_vehicletypecode2013$`VEHICLE TYPE CODE 1`,
+                           tooltip = sidata_vehicletypecode2013$`VEHICLE TYPE CODE 1`)) +
+  theme(legend.position = "none") +
+  theme(axis.text.x=element_text(angle=45, hjust=1)) +
+  xlab("Vehicle Type") +
+  ggtitle("Count of Vehicle Types involved in Accidents")
+
+ggiraph(code = print(gg_si_vehicletype2013))
+0
+2000
+4000
+BUS
+LARGE COM VEH(6 OR MORE TIRES)
+MOTORCYCLE
+OTHER
+PASSENGER VEHICLE
+PICK-UP TRUCK
+SMALL COM VEH(4 TIRES)
+SPORT UTILITY / STATION WAGON
+UNKNOWN
+VAN
+Vehicle Type
+count
+Count of Vehicle Types involved in Accidents
+Passenger vehicles, followed by SUVs.
+
+Staten Island is broken up into different neighborhoods, each with their own type of roads. Some being more hectic than others. Below graph shows the number of accidents on different Staten Island streets for 2017. It’s filtered to show streets that have had more than 50 accidents.
+
+sidata_streetname2013 <- sidata2013 %>%
+  group_by(sidata2013$`ON STREET NAME`) %>%
+  filter(n()>50)
+
+gg_si_streetname2013 <- ggplot(sidata_streetname2013, aes(sidata_streetname2013$`ON STREET NAME`)) + 
+  geom_bar_interactive(aes(fill = sidata_streetname2013$`VEHICLE TYPE CODE 1`,
+                           tooltip = sidata_streetname2013$`VEHICLE TYPE CODE 1`)) +
+  theme(legend.position = "none") +
+  theme(axis.text.x=element_text(angle=40, hjust=1)) +
+  xlab("Street Name")
+
+ggiraph(code = print(gg_si_streetname2013))
+0
+200
+400
+600
+AMBOY ROAD
+ARDEN AVENUE
+ARTHUR KILL ROAD
+BAY STREET
+CAPODANNO BOULEVARD
+CASTLETON AVENUE
+CLOVE ROAD
+DRUMGOOLE ROAD WEST
+FOREST AVENUE
+FOREST HILL ROAD
+HUGUENOT AVENUE
+HYLAN BOULEVARD
+MANOR ROAD
+NARROWS ROAD NORTH
+NEW DORP LANE
+RICHMOND AVENUE
+RICHMOND ROAD
+RICHMOND TERRACE
+ROCKLAND AVENUE
+SOUTH AVENUE
+TARGEE STREET
+TODT HILL ROAD
+VICTORY BOULEVARD
+NA
+Street Name
+count
+Hylan Boulevard seems to be the most common place for an accident to occur, followed by Richmond Road.
+
+sidata_maps2013 <- sidata2013 %>%
+  select(LATITUDE, LONGITUDE, `ON STREET NAME`, `CONTRIBUTING FACTOR VEHICLE 1`)
+
+sidata_maps <- na.omit(sidata_maps2013)
+lat2013 <- sidata_maps2013$LATITUDE
+long2013 <- sidata_maps2013$LONGITUDE
+
+b2013 <- get_map(location = "Staten Island, NY", maptype="roadmap", zoom = 12, source="google", crop = FALSE)
+ggtest2013 <- ggmap(b2013) +
+geom_point_interactive(data = sidata_maps2013, aes(x=long2013, y = lat2013, 
+                                               tooltip = sidata_maps2013$`CONTRIBUTING FACTOR VEHICLE 1`,
+                                               color = "Red",
+                                               data_id = sidata_maps2013$`CONTRIBUTING FACTOR VEHICLE 1`), size = 1, alpha = 0.7)
+
+pointmap2013 <- ggiraph(code = {print(ggtest2013)}, zoom_max = 5,
+        tooltip_offx = 20, tooltip_offy = -10, 
+        hover_css = "cursor:pointer;fill:red;stroke:red;",
+        tooltip_opacity = 0.7)
+
+pointmap2013
+40.50
+40.55
+40.60
+40.65
+-74.25
+-74.20
+-74.15
+-74.10
+-74.05
+lon
+lat
+colour
+Red
+Looking at the point graph, it’s hard to determine exactly how many points are in each area. The heatmap below gives a better example of where the most accidents happen on SI in 2013.
+
+heatmap2013 <- ggmap(b2013) +
+stat_density2d(data = sidata_maps2013, aes(x=long2013, y = lat2013, fill = ..level.., alpha = ..level..),
+                                  geom = "polygon", size = 0.01, bins = 85) +
+  scale_fill_gradient(low = "red", high = "green") +
+  scale_alpha(range = c(0, 0.3), guide = FALSE)
+
+heatmap2013
+
+Similar to the 2017 graph, most accidents happen near Hylan Blvd, on the Northshore of the Island.
+
+Out of the data, only 4 accidents resulted in death.
+
+sidata_all_death2013 <- sidata2013 %>%
+  filter(sidata2013$`NUMBER OF PERSONS KILLED` | sidata2013$`NUMBER OF PEDESTRIANS KILLED` |
+           sidata2013$`NUMBER OF CYCLIST KILLED` | sidata2013$`NUMBER OF MOTORIST KILLED`)
+
+count(sidata_all_death2013)
+## # A tibble: 1 x 1
+##       n
+##   <int>
+## 1     4
+As mentioned in the 2017 section, I’m interested to see how motorcycles specifically fair on Staten Island. The following graph shows where the most accidents happen on SI.
+
+sidata_motorcycle2013 <- sidata2013 %>%
+  filter(sidata2013$`VEHICLE TYPE CODE 1` == "MOTORCYCLE" | sidata2013$`VEHICLE TYPE CODE 2` == "MOTORCYCLE")
+
+ggplot(sidata_motorcycle2013, aes(sidata_motorcycle2013$`ON STREET NAME`)) + geom_bar() +
+  coord_flip() +
+  xlab("Street Name")
+
+count(sidata_motorcycle2013)
+## # A tibble: 1 x 1
+##       n
+##   <int>
+## 1    56
+According to the data, there were only 56 reported accidents that involved a motorcycle.
+
+After looking at the locations where an accidently is likely to happen, I wanted to look at what’s the top reason why one would get into an accident in the first place.
+
+sidata_motorcycle2013 <- sidata2013 %>%
+  filter(sidata2013$`VEHICLE TYPE CODE 1` == "MOTORCYCLE" | sidata2013$`VEHICLE TYPE CODE 2` == "MOTORCYCLE")
+
+ggplot(sidata_motorcycle2013, aes(sidata_motorcycle2013$`CONTRIBUTING FACTOR VEHICLE 1`)) + geom_bar() +
+  coord_flip() +
+  xlab("Contributing Factor")
+
+Failure to yield right-of-way, and driver distraction are the top reasons one would be involved in a motorcycle accident.
+
+lat_moto2013 <- sidata_motorcycle2013$LATITUDE
+long_moto2013 <- sidata_motorcycle2013$LONGITUDE
+b_moto2013 <- get_map(location = "Staten Island, NY", maptype="roadmap", zoom = 12, source="google", crop = FALSE)
+ggtest2013 <- ggmap(b_moto2013) +
+geom_point_interactive(data = sidata_motorcycle2013, aes(x=long_moto2013, y = lat_moto2013, 
+                                                     tooltip = sidata_motorcycle2013$`CONTRIBUTING FACTOR VEHICLE 1`,
+                                                     data_id = sidata_motorcycle2013$`CONTRIBUTING FACTOR VEHICLE 1`),
+                       size = 2, color = "red", alpha = 0.7)
+
+ggiraph(code = {print(ggtest2013)}, zoom_max = 5,
+        tooltip_offx = 20, tooltip_offy = -10, 
+        hover_css = "cursor:pointer;fill:red;stroke:red;",
+        tooltip_opacity = 0.7)
+40.50
+40.55
+40.60
+40.65
+-74.25
+-74.20
+-74.15
+-74.10
+-74.05
+lon
+lat
+ ggmap(b_moto2013) +
+stat_density2d(data = sidata_motorcycle2013, aes(x=long_moto2013, y = lat_moto2013, fill = ..level.., alpha = ..level..),
+                                  geom = "polygon", size = 0.01, bins = 20) +
+  scale_fill_gradient(low = "red", high = "green") +
+  scale_alpha(range = c(0, 0.3), guide = FALSE)
+
+The heatmap for motorcycles in 2013 is much more spread out throughout Staten Island.
+
+How many of the 56 accidents resulted in death?
+
+sidata_motorcycle_death2013 <- sidata2013 %>%
+  filter(sidata2013$`VEHICLE TYPE CODE 1` == "MOTORCYCLE" | sidata2013$`VEHICLE TYPE CODE 2` == "MOTORCYCLE")
+
+sidata_motorcycle_death2013 <- sidata_motorcycle_death2013 %>%
+  filter(sidata_motorcycle_death2013$`NUMBER OF PERSONS KILLED` | sidata_motorcycle_death2013$`NUMBER OF PEDESTRIANS KILLED` |
+           sidata_motorcycle_death2013$`NUMBER OF CYCLIST KILLED` | sidata_motorcycle_death2013$`NUMBER OF MOTORIST KILLED`)
+
+ 
+count(sidata_motorcycle_death2013)
+## # A tibble: 1 x 1
+##       n
+##   <int>
+## 1     0
+From the data, 0 resulted in a motorcycle death.
+
+Comparsion of Data
+Comparison of 2017 vs. 2013 heatmaps 
+The 2013 heatmap shows much more spread in the overall accident data than in 2017. Looking at the maps, both have a high concentration of accidents around the Northshore, specificaly around Hyland Blvd.
+
+Total number of accidents from within both datasets:
+
+0
+2000
+4000
+6000
+8000
+2013
+2017
+Contributing Factors
+count
+Total accidents for 2013 and 2017:
+
+2013	2017
+8295	6214
+Top 10 contributing factors for 2017 and 2013
+
+Rank	X2017	X2013
+1	Driver Inattention/Distraction	Unspecified
+2	Unspecified	Driver Inattention/Distraction
+3	Failure to Yield Right-of-Way	Fatigued/Drowsy
+4	Following Too Closely	Failure to Yield Right-of-Way
+5	Backing Unsafely	Backing Unsafely
+6	Turning Improperly	Pavement Slippery
+7	Passing or Lane Usage Improper	Prescription Medication
+8	Unsafe Speed	Other Vehicular
+9	Traffic Control Disregarded	Traffic Control Disregarded
+10	Unsafe Lane Changing	Driver Inexperience
+Looking at the data, in 2017 the top 3 (not included values that weren’t specified in the system) are Driver inattention/distraction, failure to yield, and following too closely.
+
+In 2013, the top 3 were Driver inattention/distraction, fatigued/drowsy, and failure to yield.
+
+Top 10 vehicles involved in an accident for 2017 and 2013
+
+Rank	X2017	X2013
+1	PASSENGER VEHICLE	PASSENGER VEHICLE
+2	SPORT UTILITY / STATION WAGON	SPORT UTILITY / STATION WAGON
+3	PICK-UP TRUCK	OTHER
+4	NA	PICK-UP TRUCK
+5	BICYCLE	UNKNOWN
+6	MOTORCYCLE	VAN
+7	TAXI	BUS
+8	BU	SMALL COM VEH(4 TIRES)
+9	VAN	LARGE COM VEH(6 OR MORE TIRES)
+10	TR	MOTORCYCLE
+Looking at the data, in 2017 the top 3 (not included values that weren’t specified in the system) are passenger vehicle, SUV, and pick-up truck.
+
+In 2013, the top 3 were are passenger vehicle, SUV, and pick-up truck.
+
+Top 5 areas on SI with the most accidents
+
+Rank	X2017	X2013
+1	NA	HYLAN BOULEVARD
+2	HYLAN BOULEVARD	RICHMOND AVENUE
+3	RICHMOND ROAD	VICTORY BOULEVARD
+4	AMBOY ROAD	RICHMOND ROAD
+5	VICTORY BOULEVARD	AMBOY ROAD
+The top 5 streets that have the most accidents have been consistant from 2013 and 2017.
+
+Twitter Analysis
+NYC’s Vision Zero is a much debated topic. Many residents don’t see the speedlimit restriction as necessary. In order to gauge the publics opinion on vision zero, I’ve decided to analyze tweets relating to #visionzeronyc, #nycvisionzero.
+
+First, I gathered the necessary keys from twitters app development page.
+
+setup_twitter_oauth(ckey, skey, token, sectoken)
+## [1] "Using direct authentication"
+I then used the twitteR package pull data from twitter.
+
+Using the searchTiwtter function, I was able to search for tweets tha had the words “nycvisionzero, visionzero, or visionzeroNYC.” The search function returned the last 1000 tweets as time of knit.
+
+#returning tweets
+visionzero.tweets <- searchTwitter("nycvisionzero  OR visionzero OR visionzeroNYC", geocode = '40.579021,-74.151535, 40km', n=1000, lang = 'en')
+#grabbing text data
+visionzero.text <- sapply(visionzero.tweets, function(x) x$getText())
+The tweets were then converted, as to help remove special characters, stop words, and numbers, that would interfere with the analysis.
+
+#remove emojii
+visionzero.text <- iconv(visionzero.text, 'UTF-8', 'ASCII')
+visionzero.corpus <- Corpus(VectorSource(visionzero.text))
+dtm <- TermDocumentMatrix(visionzero.corpus, 
+                          control = list(removePunctuation = T,
+                                                            stopwords=c("visionzero", "https", "houston", "RT", "website", "internet", "automation",
+                                                                        stopwords('english')),
+                                                            removeNumbers = T,
+                                                            tolower = T))
+
+dtm <- as.matrix(dtm)
+word.freq <- sort(rowSums(dtm), decreasing = T)
+dm <- data.frame(word=names(word.freq), freq = word.freq)
+A word cloud was then generated based off of that data, as shown below.
+
+
+Sentiment Analysis of Twitter data
+After using the tweets to create a word cloud, I wanted to run an analysis on if the tweets were positive, negative, or neutral.
+
+tweets <- visionzero.tweets
+The tweets were first pulled from twitter.
+
+tweets.df <- twListToDF(tweets)
+kable(head(tweets.df), "html", escape = F) %>%
+  kable_styling("striped", full_width = F)
+text	favorited	favoriteCount	replyToSN	created	truncated	replyToSID	id	replyToUID	statusSource	screenName	retweetCount	isRetweet	retweeted	longitude	latitude
+RT @VisionZeroCA: STICK IT TO THEM with I Park in Bike Lanes stickers featuring the many moods of @Bob_Gunderson!
+
+Order yours TODAY to s…	FALSE	0	NA	2018-05-13 14:45:31	FALSE	NA	995676420146892800	NA	Twitter Web Client	RantyHighwayman	3	TRUE	FALSE	NA	NA
+Just found out the cyclist was a professional courier and was delivering at the time of the crash. We are not relea… https://t.co/QYIpTq5aSB	FALSE	0	NA	2018-05-13 14:42:55	TRUE	NA	995675764522659840	NA	TweetDeck	bcgp	0	FALSE	FALSE	NA	NA
+RT @placardabuse: @NYPD52Pct @BronxDAClark @OIGNYPD @AndrewCohenNYC @NYPDONeill @TransAlt @Vanessalgibson @NorwoodNews @ydanis @BilldeBlasi…	FALSE	0	NA	2018-05-13 14:35:18	FALSE	NA	995673848979820545	NA	Twitter for Android	WakefieldBxDave	4	TRUE	FALSE	NA	NA
+RT @eric7anthony: When & Where will we chain the last #GhostBike ?Why do we know this job will never be done? We have the tools that work,…	FALSE	0	NA	2018-05-13 14:35:10	FALSE	NA	995673814209089538	NA	Twitter for iPhone	SamBleiberg	7	TRUE	FALSE	NA	NA
+From what I understand about this brief reading, one driver went over the “center line” and was going fast enough t… https://t.co/bAZV6fi7GT	FALSE	0	tsouth	2018-05-13 14:31:32	TRUE	995670010013118464	995672897787219973	19011295	Twitter for iPhone	tsouth	0	FALSE	FALSE	NA	NA
+RT @bcgp: Days after online video of alleged Philly cyclist getting hit by car (and just days before Philly @RideofSilence, person on bicyc…	FALSE	0	NA	2018-05-13 14:30:54	FALSE	NA	995672738298847232	NA	Twitter for iPhone	paolapquinones	5	TRUE	FALSE	NA	NA
+Clean up the tweets by removing http/s, hashtags, @, weblinks, etc.
+
+tweets.df2 <- gsub("http.*","",tweets.df$text)
+tweets.df2 <- gsub("https.*","",tweets.df2)
+tweets.df2 <- gsub("#.*","",tweets.df2)
+tweets.df2 <- gsub("@.*","",tweets.df2)
+How the tweets look after being cleaned:
+
+kable(head(tweets.df2))
+x
+RT
+Just found out the cyclist was a professional courier and was delivering at the time of the crash. We are not relea…
+RT
+RT
+From what I understand about this brief reading, one driver went over the “center line” and was going fast enough t…
+RT
+Calculate sentiment score for extracted tweets. The package ‘syuzhet’ was used to help with the sentiment analysis.
+
+##                                                                                                              tweets.df2
+## 1                                                                                                                   RT 
+## 2 Just found out the cyclist was a professional courier and was delivering at the time of the crash. We are not relea… 
+## 3                                                                                                                   RT 
+## 4                                                                                                                   RT 
+## 5 From what I understand about this brief reading, one driver went over the “center line” and was going fast enough t… 
+## 6                                                                                                                   RT 
+##   anger anticipation disgust fear joy sadness surprise trust negative
+## 1     0            0       0    0   0       0        0     0        0
+## 2     0            1       0    1   1       1        1     3        1
+## 3     0            0       0    0   0       0        0     0        0
+## 4     0            0       0    0   0       0        0     0        0
+## 5     0            0       0    0   0       0        0     1        0
+## 6     0            0       0    0   0       0        0     0        0
+##   positive
+## 1        0
+## 2        2
+## 3        0
+## 4        0
+## 5        2
+## 6        0
+Below you can see the top positive and top negative tweet as determined by Syuzhet.
+
+## [1] "I’m very proud of Tony Churchill, an innovative engineer making significant community safety &amp; livability contribut… "
+## [1] "Oh God! drivers complain about cyclists and are out there distracted killing them!! Wake up! No "
+Overall, based on the current twitter data (which is current to generating this analysis), the snetiment score is as below:
+
+Sentiment_Analysis <- ifelse(sent.value < 0, "Negative", ifelse(sent.value > 0, "Positive", "Neutral"))
+kable(table(Sentiment_Analysis), "html", escape = F) %>%
+  kable_styling("striped", full_width = T)
+Sentiment_Analysis	Freq
+Negative	80
+Neutral	831
+Positive	89
+A real time, updated view of the twitter analysis can be found in the below Shiny app.
+
+Conclusions
+As you can see, the difference between the number of accidents from 2017 to 2013 is 2081. That is, there were 2081 less accidents from 2013 to 2017!
+
+Certain areas on Staten Island are more prone to accidents than others, as evident by the heatmaps and comparison tables. The NYPD might find it useful to increase their efforts in those specific locations. By doing so, it might help reduce accidents in those areas (Hylan Blvd. being one of the worst).
+
+Twitter Analysis of keywords relating to visionzeroNYC show an overall positive association with the project. Rightfully so, since it seems that it has helped reduce accidents.
+
+One follow-up analysis might be to see how ticket renvue has increased in the city. I know from speaking with locals, a lot mention that this project is to ‘just bring money into the city.’ It would be interesting to investigate that data.
+
+Shiny
+The Shiny app allows one to search through twitter for keywords, returns those tweets, creates a geolocation on a leaflet map, and analyzes the text for sentiment analysis.
+
+https://nschettini.shinyapps.io/CUNYMSDSData607_Twitter/
+
+The Shiny app only words with tweets that have their location enabled, and filterting out emojis can sometimes interfere with the pulled tweets.
+
+References
+https://cran.r-project.org/web/packages/tidyverse/tidyverse.pdf https://cran.r-project.org/web/packages/twitteR/twitteR.pdf https://cran.r-project.org/web/packages/syuzhet/syuzhet.pdf https://cran.r-project.org/web/packages/tm/tm.pdf https://cran.r-project.org/web/packages/ggmap/ggmap.pdf
+
